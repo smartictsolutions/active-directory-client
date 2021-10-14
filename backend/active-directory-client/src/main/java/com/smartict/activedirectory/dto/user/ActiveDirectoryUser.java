@@ -15,6 +15,6 @@ public class ActiveDirectoryUser {
     private String mobilePhone;
     private String address;
     private String title;
-    private String employeNo;
+    private String employeeNo;
 
 }

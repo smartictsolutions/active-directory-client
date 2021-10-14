@@ -258,7 +258,7 @@ public class ActiveDirectoryServiceImpl implements ActiveDirectoryService {
         activeDirectoryUser.setMobilePhone(parser(String.valueOf(attributes.get(mobileKey))));
         activeDirectoryUser.setAddress(parser(String.valueOf(attributes.get(addressKey))));
         activeDirectoryUser.setTitle(parser(String.valueOf(attributes.get(titleKey))));
-        activeDirectoryUser.setEmployeNo(parser(String.valueOf(attributes.get(pidKey))));
+        activeDirectoryUser.setEmployeeNo(parser(String.valueOf(attributes.get(pidKey))));
 
     }
 
