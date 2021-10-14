@@ -1,0 +1,25 @@
+server:
+  port: 7003
+
+spring:
+  active-directory:
+    principal: "@smartict.com.tr"
+    domain-controllers: dc=smartict,dc=com,dc=tr
+    organization-unit: ou=Kullanicilar,
+    security-authentication: simple
+    filter-query: (objectClass=*)
+    provider-url: ldap://192.168.10.50:389
+    username-key: sAMAccountName
+    name-key: givenName
+    surname-key: sn
+    mail-key: mail
+    mobile-key: telephoneNumber
+    address-key: streetAddress
+    title-key: title
+    pid-key: employeeNumber
+
+active-directory:
+  security:
+    cors:
+      allowed-hosts:
+        - /**

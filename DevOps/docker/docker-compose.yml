@@ -1,0 +1,36 @@
+version: '3.9'
+services:
+  active-directory-client:
+    container_name: active-directory-client-container
+    image: active-directory-client-image
+    ports:
+      - "7003:7003"
+    environment:
+        PRINCIPAL: "@smartict.com.tr"
+        DOMAIN_CONTROLLERS: "dc=smartict,dc=com,dc=tr"
+        ORGANIZAION_UNIT: "ou=Kullanicilar,"
+        SECURITY_AUTHENTICATION: simple
+        FILTER_QUERY: "(objectClass=user)"
+        PROVIDER_URL: "ldap://192.168.10.50:389"
+        USERNAME_KEY: sAMAccountName
+        NAME_KEY: givenName
+        SURNAME_KEY: sn
+        MAIL_KEY: mail
+        MOBILE_KEY: telephoneNumber
+        ADDRESS_KEY: streetAddress
+        TITLE_KEY: title
+        PID_KEY: employeeNumber
+    volumes:
+      - ./exposed_config/active-directory-client-config-base.yml:/config/active-directory-client-config.yml
+    networks:
+      active-directory-client-net:
+        ipv4_address: 152.24.0.3
+
+networks:
+  active-directory-client-net:
+    name: active-directory-client-net
+    ipam:
+      driver: default
+      config:
+        - subnet: 152.24.0.0/16
+          gateway: 152.24.0.1

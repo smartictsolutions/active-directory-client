@@ -1,0 +1,1 @@
+Active directory client uygulamasının basit kullanıcı arayüzüdür.
