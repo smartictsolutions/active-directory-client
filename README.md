@@ -160,7 +160,7 @@ active-directory:
 
 ## API Endpoints 
 
-**POST  activedirectory/authentication**
+**POST  activedirectory/authenticate**
 
 This endpoint will authenticate user with username and password from Active Directory.
 
@@ -171,7 +171,7 @@ This endpoint will authenticate user with username and password from Active Dire
 }
 ```
 
-**POST  activedirectory/getAllUsers**
+**POST  activedirectory/users**
 
 This endpoint will send all active directory users, you can achieve from Active Directory.
 
@@ -250,7 +250,7 @@ If something goes wrong (if you get exception) . RestResponse data will be null 
 	    private String mobilePhone;
 	    private String address;
 	    private String title;
-	    private String employeNo;
+	    private String employeeNo;
 	}
 ```
 

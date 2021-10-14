@@ -26,7 +26,7 @@ public class ActiveDirectoryController {
         this.activeDirectoryService = activeDirectoryService;
     }
 
-    @PostMapping("/authentication")
+    @PostMapping("/authenticate")
     public ResponseEntity<RestResponse<ActiveDirectoryUser>> activeDirectoryAuthentication(
         @RequestBody ActiveDirectoryLoginRequest activeDirectoryLoginRequest
     ) {
@@ -57,7 +57,7 @@ public class ActiveDirectoryController {
 
     }
 
-    @PostMapping("/getAllUsers")
+    @PostMapping("/users")
     public ResponseEntity<RestResponse<List<ActiveDirectoryUser>>> getAllUsers(@RequestBody ActiveDirectoryLoginRequest activeDirectoryLoginRequest) {
         try {
             return new ResponseEntity<>(
