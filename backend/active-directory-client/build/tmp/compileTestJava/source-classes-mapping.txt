@@ -1,4 +1,0 @@
-com/smartict/activedirectory/integration/ActiveDirectoryControllerTest.java
- com.smartict.activedirectory.integration.ActiveDirectoryControllerTest
-com/smartict/activedirectory/unit/ActiveDirectoryServiceTest.java
- com.smartict.activedirectory.unit.ActiveDirectoryServiceTest

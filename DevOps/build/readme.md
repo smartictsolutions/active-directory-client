@@ -1,1 +1,0 @@
-build.sh ->mikro servislerin hepsi için docker imagelarını kaydeder
