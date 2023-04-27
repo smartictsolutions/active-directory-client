@@ -1,0 +1,31 @@
+server:
+  port: 7003
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5436/ACTIVE_DIRECTORY_DEV
+    username: activeDirectoryDevUser
+    password: Dev_PaSSw0rd_06
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+  liquibase:
+    change-log: classpath:/liquibase/active_directory_changelog-v1.0.xml
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    database: POSTGRESQL
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        enable_lazy_load_no_trans: true
+        temp:
+          use_jdbc_metadata_defaults: false
+
+active-directory:
+  is-test-env: true
+  security:
+    cors:
+      allowed-hosts:
+        - http://localhost:7003

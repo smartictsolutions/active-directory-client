@@ -1,0 +1,51 @@
+version: '3.9'
+services:
+  active-directory-db:
+    container_name: active-directory-db-container
+    image: postgres:13.10
+    restart: always
+    environment:
+      POSTGRES_USER: ACTIVEDIRECTORYUSER
+      POSTGRES_PASSWORD : Prod_PassWord_06_!
+      POSTGRES_DB: ACTIVE_DIRECTORY_DB
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./active_directory_db_data:/var/lib/postgresql/data
+    networks:
+      active-directory-net:
+        ipv4_address: 162.24.0.2
+
+  active-directory-app:
+    depends_on:
+      - active-directory-db
+    # veritabanının hazır olmasını bekliyoruz.
+    command: bash -c "while !</dev/tcp/162.24.0.2/5432; do sleep 5; done; java -jar -Dspring.config.location=file:/config/active-directory-config.yml /active-directory.jar"
+    container_name: active-directory-app-container
+    image: active-directory-app
+    restart: always
+    ports:
+      - "7003:7000"
+    volumes:
+      - ./exposed_config/active-directory-app-config-base.yml:/config/active-directory-config.yml
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    networks:
+      active-directory-net:
+        ipv4_address: 162.24.0.3
+
+networks:
+  active-directory-net:
+    name: active-directory-net
+    ipam:
+      driver: default
+      config:
+        - subnet: 162.24.0.0/16
+          gateway: 162.24.0.1  

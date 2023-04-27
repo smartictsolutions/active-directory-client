@@ -1,0 +1,1 @@
+Configuration file of the Active Directory Client App.

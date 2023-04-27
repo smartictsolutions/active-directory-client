@@ -1,0 +1,27 @@
+version: '3.9'
+services:
+  active-directory-db-dev:
+    container_name: active-directory-db-dev-container
+    image: postgres
+    environment:
+      POSTGRES_USER: activeDirectoryDevUser
+      POSTGRES_PASSWORD : Dev_PaSSw0rd_06
+      POSTGRES_DB: ACTIVE_DIRECTORY_DEV
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+    ports:
+      - "5436:5432"
+    networks:
+      active-directory-net-dev:
+        ipv4_address: 162.25.0.2
+
+networks:
+  active-directory-net-dev:
+    name: active-directory-net-dev
+    ipam:
+      driver: default
+      config:
+        - subnet: 162.25.0.0/16
+          gateway: 162.25.0.1

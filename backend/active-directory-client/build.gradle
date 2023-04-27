@@ -1,0 +1,319 @@
+import com.bmuschko.gradle.docker.tasks.container.*
+import com.bmuschko.gradle.docker.tasks.image.*
+import com.bmuschko.gradle.docker.tasks.network.*
+import org.yaml.snakeyaml.Yaml
+
+plugins {
+	id 'java-library'
+	id 'org.springframework.boot' version '2.4.5'
+	id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+	id 'com.bmuschko.docker-remote-api' version '6.6.1'
+	id "com.avast.gradle.docker-compose" version '0.13.3'
+	id 'com.github.node-gradle.node' version '2.2.4'
+	id 'com.diffplug.gradle.spotless' version '4.5.1'
+	id "jacoco"
+	id "org.sonarqube" version "3.0"
+}
+
+group = 'com.smartict'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '1.8'
+compileJava.options.encoding = 'UTF-8'
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'application'
+apply plugin: 'com.bmuschko.docker-remote-api'
+apply plugin: 'docker-compose'
+apply plugin: 'org.sonarqube'
+
+repositories {
+	mavenCentral()
+	gradlePluginPortal()
+	maven {
+		url "http://192.168.10.149:8081/repository/maven-public/"
+		allowInsecureProtocol true
+	}
+	maven {
+		url "http://192.168.10.149:8081/repository/smartict-group/"
+		allowInsecureProtocol true
+	}
+}
+
+dependencies {
+	implementation 'junit:junit:4.13.1'
+	implementation 'org.projectlombok:lombok:1.18.18'
+	implementation 'org.liquibase:liquibase-core'
+	annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+	api 'org.springframework.boot:spring-boot-starter-web'
+	api group: 'org.springframework.security', name: 'spring-security-web', version: '5.4.6'
+	api group: 'org.springframework.security', name: 'spring-security-config', version: '5.4.6'
+	api group: 'org.apache.commons', name: 'commons-lang3', version: '3.11'
+	api group: 'javax.validation', name: 'validation-api', version: '2.0.1.Final'
+	api group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.12.2'
+	api group: 'javax.persistence', name: 'javax.persistence-api', version: '2.2'
+	api group: 'org.hibernate', name: 'hibernate-validator', version: '7.0.1.Final'
+	api group: 'org.hibernate', name: 'hibernate-spatial', version: '5.4.29.Final'
+	api group: 'org.hibernate', name: 'hibernate-envers', version: '5.4.30.Final'
+	api group: 'org.springframework.boot', name: 'spring-boot-starter-data-jpa', version: '2.4.5'
+	api group: 'org.mapstruct', name: 'mapstruct', version: '1.4.2.Final'
+
+
+	annotationProcessor group: 'org.mapstruct', name: 'mapstruct-processor', version: '1.4.2.Final'
+	testAnnotationProcessor group: 'org.mapstruct', name: 'mapstruct-processor', version: '1.4.2.Final'
+	// Use JUnit test framework
+	testImplementation('org.junit.jupiter:junit-jupiter-api:5.4.2')
+	testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.4.2')
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation group: 'org.springframework.security', name: 'spring-security-test', version: '5.1.6.RELEASE'
+
+	compileOnly 'org.projectlombok:lombok:1.18.20'
+	annotationProcessor 'org.projectlombok:lombok:1.18.20'
+}
+
+// eclipse'te projeyi run etmek için lazım
+mainClassName = 'com.smartict.activedirectory.Application'
+applicationDefaultJvmArgs = ["-Dspring.profiles.active=dev"]
+
+
+/** ===========JAR OLUŞTURMA======================================================================================== */
+bootJar() {
+	doFirst {
+		clean
+	}
+	enabled = true
+	manifest {
+		attributes 'Start-Class': 'com.smartict.activedirectory.Application'
+	}
+}
+
+jar {
+	zip64 = true
+	enabled = true
+	manifest {
+		attributes 'Main-Class': 'com.smartict.activedirectory.Application'
+	}
+	from {
+		configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+		configurations.runtimeClasspath.collect() { it.isDirectory() ? it : zipTree(it) }
+	} exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+}
+
+
+/** ===========DOCKER IMAGE OLUŞTURMA=============================================================================== */
+//Uyumsuzluk olmaması için docker-compose-prod dosyasında yazacağımız image ismini alıyor.
+def dockerComposeYml = new Yaml().load(new File(new File("$projectDir").getParentFile().getParentFile().getAbsolutePath() + '/DevOps/active-directory-docker/docker-compose-prod.yml').newInputStream())
+String appDockerImageName = dockerComposeYml["services"]["active-directory-app"]["image"]
+
+//Bir önceki build sırasında oluşturulan docker image'ı silinir.
+task dockerRemoveActiveDirectoryImage(type: DockerRemoveImage) {
+	group = "active directory build"
+	description = "Removes Active Directory Application docker image"
+	targetImageId { appDockerImageName }
+	onError {
+		System.out.println("No previous image to delete")
+	}
+}
+
+//Docker build işlemi yapılır(config dosyaları ve Dockerfile kopyalanır. İmage oluşturulur.). Bu build öncesinde sırasıyla dockerRemoveActiveDirectoryImage->spotlessCheck->bootJar çalıştırıldıktan sonra build çalıştırılır.
+task dockerBuildActiveDirectoryImage(type: DockerBuildImage, dependsOn: [dockerRemoveActiveDirectoryImage, spotlessCheck.mustRunAfter('dockerRemoveActiveDirectoryImage'), bootJar.mustRunAfter(spotlessCheck)]) {
+	group = "active directory"
+	description = "Creates AD Active directory  docker image. It removes any previous images, creates a deployable Spring Boot jar file and bundles everything in a docker image"
+	doFirst {
+		println 'Starting copy for Dockerfile...'
+		copy {
+			from './Dockerfile'
+			into 'build/libs'
+		}
+		copy {
+			from 'src/main/resources/liquibase/active_directory_changelog-v1.0.xml'
+			into 'build/libs'
+		}
+		println 'Starting copy for config files...'
+		copy {
+			from 'src/main/resources/application-docker.yml'
+			into '../../DevOps/active-directory-docker/exposed_config'
+			rename('application-docker.yml', 'active-directory-app-config-base.yml')
+		}
+	}
+	description = "Builds ${appDockerImageName} docker image."
+	inputDir.set(file('build/libs'))
+	images.add(appDockerImageName)
+}
+
+//Oluşturulan docker image'ı kaydedilir.
+task dockerSaveActiveDirectoryImage(dependsOn: dockerBuildActiveDirectoryImage, type: DockerSaveImage) {
+	group = "active directory"
+	description = "This task creates AD Application docker image and exports it as a .tar file to be deployed remotely"
+	destFile.set(file("../../DevOps/active-directory-docker/${appDockerImageName}.tar"))
+	image.set(appDockerImageName)
+	// bu olmazsa Jenkins'te bu task '> Task :dockerSaveEybisImage UP-TO-DATE' olarak görünüyor ve yeni imaj yerine önceki sunucuya kopyalanıyor
+	outputs.upToDateWhen { false } // https://stackoverflow.com/a/18410574
+}
+
+
+dockerCompose {
+	useComposeFiles = ['../../DevOps/active-directory-docker/docker-compose-dev.yml']
+}
+
+tasks.withType(JavaCompile) {
+	options.compilerArgs += ["-Xlint:deprecation", "-Xlint:unchecked"]
+}
+
+/** ===========SPOTLESS============================================================================================= */
+spotless {
+	java {
+		target '**/*.java'
+		licenseHeader '/* SmartICT Bilisim A.S. (C) $YEAR */'
+		eclipse().configFile '../smartict-java-code-style.xml'
+		removeUnusedImports()
+	}
+}
+
+/** ===========DATABASE====================================================================================================== */
+boolean isTestEnv = project.hasProperty("testEnv")
+def dockerComposeDevYml = new Yaml().load(new File(new File("$projectDir").getParentFile().getParentFile().getAbsolutePath() + '/DevOps/active-directory-docker/docker-compose-dev.yml').newInputStream())
+String dbContainerName = dockerComposeDevYml["services"]["active-directory-db-dev"]["container_name"]
+String dbUsername = dockerComposeDevYml["services"]["active-directory-db-dev"]["environment"]["POSTGRES_USER"]
+String dbPassword = dockerComposeDevYml["services"]["active-directory-db-dev"]["environment"]["POSTGRES_PASSWORD"]
+String dbName = dockerComposeDevYml["services"]["active-directory-db-dev"]["environment"]["POSTGRES_DB"]
+String dbInnerIP = dockerComposeDevYml["services"]["active-directory-db-dev"]["networks"]["active-directory-net-dev"]["ipv4_address"]
+
+
+/** ===========SONARQUBE============================================================================================= */
+sonarqube {
+	properties {
+		property "sonar.host.url", "http://localhost:9000"
+		property "sonar.login", "admin"
+		property "sonar.password", "admin"
+		property "sonar.projectName", "active-directory"
+		property "sonar.projectKey", "com.smartict:active-directory"
+		property "sonar.sourceEncoding", "UTF-8"
+		property "sonar.exclusions", "**/*Generated.java"
+		property "sonar.java.binaries", "${project.buildDir}/classes"
+		property "sonar.junit.reportPaths", "${project.buildDir}/test-results/test"
+		property "sonar.java.coveragePlugin", "jacoco"
+		property "sonar.coverage.jacoco.xmlReportPaths", "${project.buildDir}/reports/jacoco/test/jacocoTestReport.xml"
+		property "sonar.dynamicAnalysis", "reuseReports"
+	}
+}
+
+
+jacocoTestReport {
+	reports {
+		xml.enabled true
+		html.enabled false
+	}
+}
+
+plugins.withType(JacocoPlugin) {
+	tasks["test"].finalizedBy 'jacocoTestReport'
+}
+
+/** ===========TEST==================================================================================================
+ * active-directory-app entegrasyon testleri için docker üzerinde PostGIS ayağa kaldırıyoruz.
+ *
+ * İlk başta h2 kullanıyorduk ancak h2'nin geography desteği olmadığı ve sürekli postgre/postgis ile uyumsuzluklar
+ * çıktığından testler için de PostGIS kullanmaya karar verdik.
+ *
+ * Buradaki docker tasklarını manuel olarak çalıştırmaya gerek yok.
+ * En alttaki test taskı çalıştırıldığında önce postgis container'ı oluşturulup çalıştırılıyor.
+ * Sonra testler çalıştırılıyor.
+ * Testler bittikten sonra (testler başarısız da olsa) docker containerı durdurulup siliniyor.
+ *
+ * Eğer testleri debug etmek için veritabanını gözlemlemek gerekirse en alttaki "test.finalizedBy(dockerRemoveTestDB)"
+ * satırı kapatılabilir. Böylece testler bittikten sonra veritabanı container'ı silinmez.
+ * Ancak bu durumda testleri yeniden çalıştırmadan önce veritabanı container'ının manuel olarak
+ * (docker container rm -f eybis-int-test-db) komutu ile silinmesi gerekir.
+ */
+task dockerPullTestDB(type: DockerPullImage) {
+	group = "integration tests database (PostGIS) container"
+	image.set("postgis/postgis:13-3.1")
+	description = "Pulls PostGIS docker image (${image}) for integration tests db."
+}
+
+String testDbContainerName = "active-directory-int-test-db"
+String testDbNetworkName = "active-directory-int-test-net"
+task dockerCreateTestNetwork(type: DockerCreateNetwork) {
+	group = "integration tests database (PostGIS) container"
+	description = "Creates network for integration tests db."
+	networkName.set(testDbNetworkName)
+}
+
+task dockerRemoveTestNetwork(type: DockerRemoveNetwork) {
+	group = "integration tests database (PostGIS) container"
+	description = "Removes network for integration tests db."
+	networkId.set(dockerCreateTestNetwork.getNetworkId())
+}
+
+task dockerCreateTestDB(dependsOn: [dockerPullTestDB, dockerCreateTestNetwork], type: DockerCreateContainer) {
+	group = "integration tests database (PostGIS) container"
+	imageId.set(dockerPullTestDB.getImage())
+	containerName.set(testDbContainerName)
+	description = "Creates a PostGIS docker container (${testDbContainerName}) for integration tests db."
+	hostConfig.shmSize.set(1024 * 1024 * 1024L)
+
+	withEnvVar('POSTGRES_DB', "ACTIVE-DIRECTORY_INT_TEST_DB")
+	withEnvVar('POSTGRES_USER', "1ntTestUser")
+	withEnvVar('POSTGRES_PASSWORD', "1ntTestP@ssw0rd")
+
+	hostConfig.network.set(testDbNetworkName)
+	hostConfig.portBindings.set(["5439:5432"])
+}
+
+task dockerStartTestDB(dependsOn: dockerCreateTestDB, type: DockerStartContainer) {
+	group = "integration tests database (PostGIS) container"
+	description = "Starts " + testDbContainerName + " container."
+	targetContainerId { testDbContainerName }
+}
+
+task dockerRemoveTestDB(type: DockerRemoveContainer) {
+	group = "integration tests database (PostGIS) container"
+	description = "Removes " + testDbContainerName + " container."
+	targetContainerId { testDbContainerName }
+	force.set(true)
+}
+dockerRemoveTestDB.finalizedBy(dockerRemoveTestNetwork)
+
+task testDbLoad() {
+	doLast {
+		exec {
+			println "\n${activeDirectoryLiquibaseContainerName} container (testDb için) çalıştırılıyor...\n"
+			workingDir activeDirectoryLiquibaseDir
+			executable "docker"
+			args "run", "--rm",
+					"--name", activeDirectoryLiquibaseContainerName,
+					"--network", testDbNetworkName,
+					"-e", "DB_USER=1ntTestUser",
+					"-e", "DB_PASSWORD=1ntTestP@ssw0rd",
+					"-e", "DB_HOST=${testDbContainerName}",
+					"-e", "DB_PORT=5432",
+					"-e", "DB_NAME=ACTIVE_DIRECTORY_INT_TEST_DB",
+					"-e", "DB_SCHEMA=public"
+
+		}
+	}
+}
+
+test {
+	dependsOn([dockerStartTestDB, testDbLoad.mustRunAfter(dockerStartTestDB)])
+	useJUnitPlatform {
+		systemProperty "active-directory.is-test-env", "true"
+	}
+	testLogging {
+		showStandardStreams = true
+	}
+}
+// finalizedBy sayesinde test taskı başarısız olsa bile dockerRemoveTestDB çalıştırılıyor ancak dockerStartTestDB veya testDbLoad başarısız olursa test taskı
+// çalışmıyor dolayısı ile test.finalizedBy(dockerRemoveTestDB) de çalışmıyor. Diğer taskların başarısız olma durumlarını gradle.taskGraph.afterTask'ta handle ediyoruz.
+test.finalizedBy(dockerRemoveTestDB)
+
+gradle.taskGraph.afterTask { Task task, TaskState state ->
+	if (state.failure && (task.name == "dockerCreateTestDB" || task.name == "dockerStartTestDB" || task.name == "testDbLoad")) {
+		println "${task.name} başarısız!"
+		tasks.dockerRemoveTestDB.start()
+		tasks.dockerRemoveTestNetwork.start()
+	}
+}
+
